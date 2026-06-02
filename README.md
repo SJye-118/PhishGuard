@@ -48,30 +48,75 @@ PhishGuard accepts a raw URL string and returns:
 
 ---
 
-## Architecture
+## System Architecture
 
-Request
-│
-▼
-[Layer 0]  API Gateway         ← Input validation, Redis cache lookup
-│
-▼
-[Layer 1]  ML Advisory Engine  ← Structural pattern recognition (RandomForest)
-[Layer 2]  Forensic Engine     ← Live RDAP domain age + TLS inspection  } concurrent
-[Layer 3]  Impersonation Check ← Brand keyword matching (Tranco-sourced)
-│
-▼
-[Layer 4]  Atomic Veto Logic   ← Deterministic override (age < 14d + brand match)
-│
-▼
-Response   risk_score + risk_tier + verdict + justification[]
+This system processes incoming risk assessment requests through a deterministic, multi-layered security pipeline. It combines machine learning classification, real-time forensic scanning, and hard-coded veto rules to deliver fast, accurate risk scores.
 
+### Request Lifecycle
 
-The key innovation: the **atomic veto**. A standard ML model sees
-`paypal-login.com` and `john-blog.com` as structurally near-identical.
-The veto layer detects brand keywords combined with newly registered domains
-and forces a CRITICAL verdict — regardless of what the ML model scores.
+## Architecture & Data Flow
 
+```mermaid
+flowchart TD
+    A[📩 Incoming Request] --> B[API Gateway]
+
+    subgraph L0 [Layer 0 · API Gateway]
+        B --> B1[Input Validation]
+        B --> B2[Redis Cache Lookup]
+    end
+
+    B1 --> C[ML Advisory Engine]
+    B2 --> C
+
+    subgraph L1 [Layer 1 · ML Advisory Engine]
+        C --> C1[RandomForest Classification]
+        C --> C2[Structural Feature Analysis]
+    end
+
+    C1 --> D[Forensic Engine]
+    C2 --> E[Impersonation Detection]
+
+    subgraph L2 [Layer 2 · Forensics]
+        D --> D1[RDAP Domain Age]
+        D --> D2[TLS Certificate Inspection]
+    end
+
+    subgraph L3 [Layer 3 · Impersonation]
+        E --> E1[Brand Similarity Matching]
+        E --> E2[Tranco Intelligence Dataset]
+    end
+
+    D1 --> F[Atomic Veto Logic]
+    D2 --> F
+    E1 --> F
+    E2 --> F
+
+    subgraph L4 [Layer 4 · Deterministic Override]
+        F --> F1{"Age < 14 Days?"}
+        F --> F2{Brand Match?}
+    end
+
+    F1 --> G[Risk Assessment Response]
+    F2 --> G
+
+    G --> G1[risk_score]
+    G --> G2[risk_tier]
+    G --> G3[verdict]
+    G --> G4["justification[]"]
+
+    %% Professional GitHub-friendly styling
+    classDef gateway fill:#E8F1FF,stroke:#2563EB,stroke-width:2px,color:#111;
+    classDef ml fill:#F3E8FF,stroke:#7C3AED,stroke-width:2px,color:#111;
+    classDef forensic fill:#FFF7ED,stroke:#EA580C,stroke-width:2px,color:#111;
+    classDef veto fill:#FEF2F2,stroke:#DC2626,stroke-width:3px,color:#111;
+    classDef output fill:#ECFDF5,stroke:#16A34A,stroke-width:2px,color:#111;
+
+    class B,B1,B2 gateway;
+    class C,C1,C2 ml;
+    class D,D1,D2,E,E1,E2 forensic;
+    class F,F1,F2 veto;
+    class G,G1,G2,G3,G4 output;
+```
 ---
 
 ## Development Phases
@@ -180,18 +225,39 @@ pytest tests/ -v --cov=phishguard --cov-report=term-missing
 
 ## Project Structure
 
+```text
 phishguard/
-├── config.py          # Environment variable management (pydantic-settings)
-├── main.py            # FastAPI application entry point
-├── engine.py          # Ensemble fusion and atomic veto logic (Phase 7)
+│
+├── main.py
+│   └── FastAPI application entry point
+│
+├── config.py
+│   └── Environment and settings management
+│
+├── engine.py
+│   └── Risk scoring, ensemble fusion, and atomic veto logic
+│
 ├── models/
-│   └── schemas.py     # Pydantic request/response schemas = OpenAPI contract
-├── ml/                # Machine learning pipeline (Phases 4-5)
-├── forensics/         # RDAP and SSL inspection (Phase 6)
-├── cache/             # Redis client (Phase 8)
+│   └── schemas.py
+│       └── Pydantic request/response models (OpenAPI contract)
+│
+├── ml/
+│   └── Machine learning feature extraction and classification
+│
+├── forensics/
+│   └── RDAP, TLS, and domain intelligence inspection
+│
+├── cache/
+│   └── Redis caching layer
+│
 └── utils/
-├── url_parser.py  # URL normalisation and domain extraction
-└── logging_config.py  # Structured JSON logging
+    ├── url_parser.py
+    │   └── URL normalization and domain extraction
+    │
+    └── logging_config.py
+        └── Structured JSON logging
+```
+
 
 ---
 
