@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────
+# PhishGuard Enterprise — Project & Tooling Configuration
+# ─────────────────────────────────────────────────────────────────
+
+[project]
+name = "phishguard-enterprise"
+version = "1.0.0"
+description = "Real-time phishing detection via ML + deterministic forensics"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "PhishGuard Enterprise Contributors" }]
+keywords = ["phishing", "security", "machine-learning", "fastapi", "cybersecurity"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Security",
+]
+
+# ── Ruff (linter + formatter rules) ──────────────────────────────
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+exclude = [
+    ".git", ".venv", "__pycache__", "build", "dist",
+    "data/", "artefacts/", "metrics/",
+]
+
+[tool.ruff.lint]
+# Rule sets enabled:
+# E/W = pycodestyle  |  F = pyflakes  |  I = isort
+# B = flake8-bugbear  |  D = pydocstyle  |  T20 = no print()
+# S = bandit-style security  |  RUF = ruff-specific
+select = ["E", "W", "F", "I", "B", "D", "T20", "RUF"]
+ignore = [
+    "D100",  # Missing docstring in public module (handled per-file)
+    "D104",  # Missing docstring in public package
+    "D203",  # one-blank-line-before-class (conflicts with D211)
+    "D213",  # multi-line-summary-second-line (conflicts with D212)
+    "E501",  # Line too long — black handles this
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "S101"]  # No docstrings or assert warnings in tests
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# ── Black (formatter) ────────────────────────────────────────────
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+include = '\.pyi?$'
+
+# ── mypy (type checker) ───────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+ignore_missing_imports = true  # Third-party stubs not always available
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false  # Relax for test files
+
+# ── pytest ───────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+markers = [
+    "unit: Pure unit tests with no external dependencies",
+    "integration: Tests requiring the running FastAPI app",
+    "slow: Tests that take more than 2 seconds",
+]
+
+# ── Coverage ──────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["phishguard"]
+omit = [
+    "phishguard/ml/train.py",   # Training script — not in inference path
+    "scripts/*",
+    "tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "\\.\\.\\.",  # Stub bodies
+]
