@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────
+# PhishGuard Enterprise — Production Dependencies
+# All packages are free and open source.
+# ─────────────────────────────────────────────────────────────────
+
+# API framework and server
+fastapi>=0.111.0,<0.113.0
+uvicorn[standard]>=0.29.0,<0.31.0
+
+# Schema validation and settings management
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.3.0,<3.0.0
+
+# Async HTTP client for RDAP queries (Phase 6 forensic layer)
+aiohttp>=3.9.0,<4.0.0
+
+# Async Redis client (Phase 8 caching layer)
+aioredis>=2.0.0,<3.0.0
+
+# Machine learning (Phase 5)
+scikit-learn>=1.4.0,<1.6.0
+numpy>=1.26.0,<2.0.0
+joblib>=1.4.0,<2.0.0
+
+# Data processing (training pipeline — NOT in the inference path)
+pandas>=2.2.0,<3.0.0
+
+# Domain parsing using the live Mozilla Public Suffix List
+tldextract>=5.1.0,<6.0.0
+
+# Data and model version control (DVC pipeline management)
+dvc>=3.50.0,<4.0.0
+
+# TLS/SSL supplementary cryptography operations (Phase 6)
+cryptography>=42.0.0,<43.0.0
+
+# Synchronous HTTP client for data pipeline fetch scripts (Phase 2)
+# Note: aiohttp is used by the async API; requests is used by the
+# sync DVC pipeline scripts which run outside the event loop.
+requests>=2.32.0,<3.0.0

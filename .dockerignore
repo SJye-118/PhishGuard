@@ -1,0 +1,46 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+
+# Virtual environments
+.venv
+venv
+env
+
+# Development and test files
+tests/
+*.md
+.pre-commit-config.yaml
+pyproject.toml (keep — ruff needs it in some workflows)
+
+# Environment files (secrets must never enter the image)
+.env
+.env.*
+!.env.example
+
+# Training data and raw datasets (large files; not needed at inference)
+data/raw/
+data/processed/
+data/features/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.idea/
+.vscode/
+
+# CI
+.github/
+
+# DVC cache (remote storage handles this)
+.dvc/cache/

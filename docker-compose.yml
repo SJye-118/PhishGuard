@@ -1,0 +1,77 @@
+# ═════════════════════════════════════════════════════════════════
+# PhishGuard Enterprise — Local Development Stack
+#
+# Starts two services:
+#   api   → FastAPI application with hot-reload enabled
+#   redis → Redis 7 with append-only persistence
+#
+# Usage:
+#   docker compose up -d          Start in background
+#   docker compose logs -f api    Tail API logs
+#   docker compose down           Stop and remove containers
+# ═════════════════════════════════════════════════════════════════
+version: "3.9"
+
+services:
+
+  # ── FastAPI Application ─────────────────────────────────────────
+  api:
+    build:
+      context: .
+      target: runtime          # Use the runtime stage (not builder)
+    container_name: phishguard_api
+    ports:
+      - "8000:8000"
+    environment:
+      REDIS_URL: "redis://redis:6379"
+      MODEL_PATH: "./artefacts/phishguard_model.joblib"
+      LOG_LEVEL: "DEBUG"
+      ENVIRONMENT: "development"
+      BRAND_LIST_SIZE: "1000"
+      RDAP_TIMEOUT_MS: "1500"
+      SSL_TIMEOUT_MS: "1500"
+      CACHE_TTL_SECONDS: "86400"
+      VETO_AGE_THRESHOLD_DAYS: "14"
+      APP_VERSION: "1.0.0"
+    volumes:
+      # Mount source code for hot-reload (development only)
+      # In production, code is baked into the image
+      - ./phishguard:/app/phishguard:ro
+      # Mount artefacts directory — pull model via DVC before running
+      - ./artefacts:/app/artefacts:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Override CMD for development to enable hot-reload
+    command: ["uvicorn", "phishguard.main:app",
+              "--host", "0.0.0.0",
+              "--port", "8000",
+              "--reload",
+              "--log-level", "debug"]
+
+  # ── Redis 7 ─────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: phishguard_redis
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"          # Expose for local debugging via redis-cli
+    volumes:
+      - redis_data:/data     # Persist cache across container restarts
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+# ── Named Volumes ───────────────────────────────────────────────
+volumes:
+  redis_data:
+    driver: local

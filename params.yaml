@@ -1,0 +1,42 @@
+# ═════════════════════════════════════════════════════════════════
+# PhishGuard Enterprise — DVC-tracked Hyperparameters
+#
+# Changes to this file trigger re-runs of affected DVC stages.
+# All ML decisions are documented and version-controlled here.
+# ═════════════════════════════════════════════════════════════════
+
+# ── Data configuration ─────────────────────────────────────────
+data:
+  label_benign: 0           # Integer label assigned to Tranco domains
+  label_malicious: 1        # Integer label assigned to PhishTank URLs
+  min_rows_tranco: 900000   # Minimum row count assertion (Phase 3)
+  min_rows_phishtank: 20000 # Minimum row count assertion (Phase 3)
+  max_imbalance_ratio: 10   # Maximum benign:malicious ratio allowed
+
+# ── Train/test split ──────────────────────────────────────────
+split:
+  test_size: 0.20         # 20% held out for evaluation
+  random_state: 42        # Fixed seed for reproducibility
+  stratify: true          # Maintain class balance in both splits
+
+# ── Model hyperparameters ──────────────────────────────────────
+model:
+  algorithm: RandomForestClassifier
+  n_estimators: 300        # Number of decision trees in the forest
+  max_depth: 15            # Maximum depth per tree (caps overfitting)
+  min_samples_leaf: 5      # Minimum samples required at each leaf
+  class_weight: balanced   # Compensates for class imbalance
+  random_state: 42
+  n_jobs: -1               # Use all available CPU cores during training
+
+# ── Promotion gates ───────────────────────────────────────────
+# These thresholds are enforced by the CI pipeline before deployment.
+# A new model MUST pass BOTH gates to replace the production champion.
+promotion_gates:
+  min_precision: 0.98      # Minimum precision on held-out test split
+  min_recall: 0.90         # Minimum recall on held-out test split
+
+# ── Veto logic (runtime — mirrors .env defaults) ───────────────
+veto:
+  age_threshold_days: 14   # Domain age below this triggers veto evaluation
+  brand_list_size: 1000    # Top N Tranco domains used as brand keywords

@@ -76,15 +76,18 @@ disallow_untyped_defs = false  # Relax for test files
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Add the project root to sys.path so tests can import from
+# scripts.* and phishguard.* without an editable install.
+pythonpath = ["."]
 addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
 ]
 markers = [
-    "unit: Pure unit tests with no external dependencies",
-    "integration: Tests requiring the running FastAPI app",
-    "slow: Tests that take more than 2 seconds",
+    "unit: Pure unit tests — no external I/O or network calls",
+    "integration: Tests requiring the running FastAPI application",
+    "slow: Tests that take more than 2 seconds to run",
 ]
 
 # ── Coverage ──────────────────────────────────────────────────────

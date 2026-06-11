@@ -1,0 +1,1 @@
+"""Redis caching layer — implemented in Phase 8."""

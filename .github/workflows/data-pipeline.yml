@@ -1,0 +1,168 @@
+# ═════════════════════════════════════════════════════════════════
+# PhishGuard Enterprise — Scheduled Data Pipeline
+#
+# This workflow performs the ACTUAL data downloads from upstream
+# sources. It runs on a schedule and can be triggered manually.
+#
+# Unlike pr-validation.yml (which mocks all network calls),
+# this workflow makes real HTTP requests to:
+#   - https://tranco-list.eu/top-1m.csv.zip
+#   - https://data.phishtank.com/data/online-valid.json.bz2
+#   - https://openphish.com/feed.txt (fallback)
+#
+# Prerequisites:
+#   - DVC remote storage must be configured (S3 or HuggingFace Hub)
+#   - PHISHTANK_API_KEY secret (optional but recommended)
+#   - DVC_ACCESS_KEY_ID and DVC_SECRET_ACCESS_KEY (if using S3 remote)
+#
+# STUDENT NOTE:
+#   For a portfolio project without S3, replace dvc push with a
+#   manual download step or use DVC's local remote storage.
+#   See: https://dvc.org/doc/user-guide/data-management/remote-storage
+# ═════════════════════════════════════════════════════════════════
+name: Data Pipeline — Fetch and Version Training Data
+
+on:
+  # Run daily at 02:00 UTC (after midnight UTC)
+  schedule:
+    - cron: "0 2 * * *"
+
+  # Allow manual trigger from the GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Data source to fetch"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - tranco_only
+          - phishtank_only
+
+concurrency:
+  group: data-pipeline
+  cancel-in-progress: false   # Never cancel a running data fetch
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+
+  # ── Fetch Tranco ────────────────────────────────────────────────
+  fetch-tranco:
+    name: Fetch Tranco Top-1M
+    runs-on: ubuntu-latest
+    if: >
+      github.event.inputs.source == 'all' ||
+      github.event.inputs.source == 'tranco_only' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Tranco data fetch
+        run: python -m scripts.fetch_tranco
+        timeout-minutes: 10
+
+      - name: Verify output file exists and has header
+        run: |
+          test -f data/raw/tranco_raw.csv
+          head -1 data/raw/tranco_raw.csv | grep -q "rank,domain"
+          wc -l data/raw/tranco_raw.csv
+
+      - name: Verify checksum sidecar created
+        run: test -f data/raw/tranco_raw.csv.sha256
+
+      - name: Upload as workflow artefact (portfolio fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tranco-raw-${{ github.run_number }}
+          path: |
+            data/raw/tranco_raw.csv
+            data/raw/tranco_raw.csv.sha256
+          retention-days: 7
+
+  # ── Fetch PhishTank ─────────────────────────────────────────────
+  fetch-phishtank:
+    name: Fetch PhishTank Verified Feed
+    runs-on: ubuntu-latest
+    if: >
+      github.event.inputs.source == 'all' ||
+      github.event.inputs.source == 'phishtank_only' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run PhishTank data fetch
+        run: python -m scripts.fetch_phishtank
+        timeout-minutes: 15
+        env:
+          # Optional: set in GitHub repository secrets for higher rate limits
+          PHISHTANK_API_KEY: ${{ secrets.PHISHTANK_API_KEY }}
+          # Set to "true" if PhishTank is unavailable
+          USE_OPENPHISH: ${{ vars.USE_OPENPHISH || 'false' }}
+
+      - name: Verify output file is valid JSON
+        run: |
+          test -f data/raw/phishtank_raw.json
+          python -c "
+          import json, sys
+          with open('data/raw/phishtank_raw.json') as f:
+              data = json.load(f)
+          assert isinstance(data, list), 'Expected a JSON array'
+          assert len(data) >= 20000, f'Too few entries: {len(data)}'
+          print(f'Verified: {len(data):,} phishing entries')
+          "
+
+      - name: Verify checksum sidecar created
+        run: test -f data/raw/phishtank_raw.json.sha256
+
+      - name: Upload as workflow artefact (portfolio fallback)
+        uses: actions/upload-artifact@v4
+        with:
+          name: phishtank-raw-${{ github.run_number }}
+          path: |
+            data/raw/phishtank_raw.json
+            data/raw/phishtank_raw.json.sha256
+          retention-days: 7
+
+  # ── Summary ─────────────────────────────────────────────────────
+  pipeline-summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [fetch-tranco, fetch-phishtank]
+    if: always()
+
+    steps:
+      - name: Report pipeline result
+        run: |
+          echo "## Data Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Source | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Tranco Top-1M | ${{ needs.fetch-tranco.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PhishTank Verified | ${{ needs.fetch-phishtank.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Run: ${{ github.run_number }} | Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
